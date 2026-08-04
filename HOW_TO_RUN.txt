@@ -1,0 +1,85 @@
+===============================================================
+  BTP Pipeline — HOW TO RUN (Step by Step)
+  IIT Kharagpur | Wheel Wander & Lateral Offset Analysis
+===============================================================
+
+
+STEP 1 — Install all dependencies  (do this ONCE)
+--------------------------------------------------
+  pip install -r requirements.txt
+
+
+STEP 2 — Run a single video  (first time — calibration required)
+-----------------------------------------------------------------
+  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --calib-file calib.json
+
+  >> When the window opens, you will click 8 points total:
+       [Phase 1]  Click 4 road corners in order:
+                    P1 = Far Left,  P2 = Far Right,
+                    P3 = Near Left, P4 = Near Right
+       [Phase 2]  Click 2 points along the RIGHT road boundary
+       [Phase 3]  Click 2 points to draw the measurement gate line
+
+  >> Calibration will be requested every time you run a video.
+
+  >> The output video is written at 24 fps, and the on-screen text has been enlarged for readability.
+
+  >> Calibration is saved to calib.json automatically.
+  >> You will be asked to click the 8 points again for every new video.
+
+  Keyboard controls while it runs:
+    SPACE  = Pause / Resume
+    E      = Export Excel + CSV right now
+    S      = Save current frame as PNG
+    R      = Redo calibration
+    Q      = Quit (auto-saves everything on exit)
+
+  Output files produced:
+    094147-00015-M_annotated.mp4      (annotated video)
+    094147-00015-M_offsets.xlsx       (Excel measurements)
+    094147-00015-M_offsets.csv        (CSV measurements)
+
+
+STEP 3 — Run ALL 5 videos automatically (after calib.json is saved)
+---------------------------------------------------------------------
+  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x
+
+  >> Processes all .TS videos one by one using saved calibration.
+  >> All outputs go into:  outputs\<video_name>\
+
+
+STEP 4 — Generate statistical analysis & charts
+------------------------------------------------
+  python analyze.py --csv outputs\*\*_offsets.csv --output-dir analysis
+
+  Output files produced in  analysis\  folder:
+    statistics.csv                    (summary stats table)
+    wheel_wander_report.xlsx          (full Excel report)
+    figures\01_distribution_overview.png
+    figures\02_truck_wheel_wander.png
+    figures\03_boxplot_by_type.png
+    figures\04_lane_utilisation_heatmap.png
+    figures\05_center_offset_timeseries.png
+    figures\06_vehicle_distribution.png
+
+
+===============================================================
+  SUMMARY — Run these 4 commands in order:
+===============================================================
+
+  1.  pip install -r requirements.txt
+
+  2.  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --calib-file calib.json
+
+  3.  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x
+
+  4.  python analyze.py --csv outputs\*\*_offsets.csv --output-dir analysis
+
+===============================================================
+  NOTES:
+    - Run Step 2 first if you want to create calib.json, but the app will still ask for the 8-point setup on every video.
+    - Step 3 will ask for calibration on every video, so you click the 8 points each time.
+    - If you want to use a lighter/faster model, replace yolo11x with yolo11l or yolo11m.
+    - All scripts must be run from the  f:\BTP\Autmn Sem\  directory.
+    - Default road width = 7.0 m, lane width = 3.5 m. Change with --road-width / --lane-width.
+===============================================================

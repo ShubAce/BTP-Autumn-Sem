@@ -1,0 +1,75 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual Environments
+.venv/
+venv/
+env/
+BTP/
+ENV/
+env.bak/
+venv.bak/
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Operating System Files
+Thumbs.db
+Desktop.ini
+.DS_Store
+
+# YOLO & Model Weights
+*.pt
+*.onnx
+*.engine
+*.bin
+yolo*.pt
+
+# Video / Media files
+*.mp4
+*.avi
+*.mov
+*.mkv
+*.TS
+*.ts
+
+# Pipeline Outputs & Generated Data
+outputs/
+analysis/
+analysis_output/
+runs/
+*_annotated.mp4
+*_offsets.csv
+*_offsets.xlsx
+*.log
+
+# Calibration data (uncomment if calibration files should not be tracked)
+# calib.json

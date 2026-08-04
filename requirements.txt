@@ -1,0 +1,11 @@
+ultralytics
+supervision
+opencv-python
+numpy
+openpyxl
+pandas
+matplotlib
+seaborn
+scipy
+filterpy
+lapx
