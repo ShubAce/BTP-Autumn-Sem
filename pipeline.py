@@ -56,13 +56,73 @@ except ImportError:
     PANDAS_OK = False
 # -- COCO class map --------------------------------------------------------
 VEHICLE_CLASSES: Dict[int, str] = {
-    1: "bicycle",
-    2: "car",
-    3: "motorcycle",
-    5: "bus",
-    7: "truck",
+    0: "rider",            # person/rider
+    1: "bicycle",          # bicycle/cycle
+    2: "car",              # car / sedan / hatchback / SUV / autorickshaw / pickup
+    3: "motorcycle",       # motorcycle / scooter / two_wheeler / autorickshaw
+    5: "bus",              # bus / minibus
+    6: "multi_axle_truck", # train in COCO -> multi-axle / container truck in traffic
+    7: "truck",            # truck / pickup / LCV
 }
-TRUCK_CLASSES = {5, 7}          # bus + truck get wheel analysis
+
+# Per-class confidence thresholds to ensure small/fast 2-wheelers (bikes, motorcycles)
+# and riders are retained even when low-scoring
+CLASS_CONF_THRESHOLDS: Dict[int, float] = {
+    0: 0.15,  # rider/person
+    1: 0.12,  # bicycle
+    3: 0.12,  # motorcycle
+    2: 0.20,  # car
+    5: 0.20,  # bus
+    6: 0.20,  # multi-axle truck
+    7: 0.20,  # truck
+}
+
+TRUCK_CLASSES = {"bus", "truck", "multi_axle_truck", "pickup"}  # Heavy vehicles for wheel wander focus
+
+def classify_indian_vehicle(cls_id: int, bw: int, bh: int, conf: float) -> str:
+    """
+    Refines COCO class predictions into standard Indian traffic categories:
+    - bicycle
+    - motorcycle
+    - autorickshaw (3-wheeler)
+    - car
+    - pickup / van (LCV)
+    - bus
+    - truck
+    - multi_axle_truck
+    - rider
+    """
+    aspect_ratio = bw / float(bh) if bh > 0 else 1.0
+    area = bw * bh
+
+    if cls_id == 1:
+        return "bicycle"
+    elif cls_id == 3:
+        # Auto-rickshaws detected as motorcycle (boxy, wider profile)
+        if aspect_ratio > 0.85 and area > 15000:
+            return "autorickshaw"
+        return "motorcycle"
+    elif cls_id == 0:
+        return "rider"
+    elif cls_id == 2:  # COCO car
+        # Auto-rickshaw (tall boxy 3-wheeler)
+        if 0.65 <= aspect_ratio <= 1.05 and area < 28000:
+            return "autorickshaw"
+        # Small pickup / LCV (e.g. Tata Ace, Eeco, Bolero Pickup)
+        elif 0.85 <= aspect_ratio <= 1.35 and area > 32000:
+            return "pickup"
+        return "car"
+    elif cls_id == 5:  # COCO bus
+        return "bus"
+    elif cls_id == 6:  # COCO train -> multi axle truck in traffic
+        return "multi_axle_truck"
+    elif cls_id == 7:  # COCO truck
+        if area > 80000 or aspect_ratio > 1.8:
+            return "multi_axle_truck"
+        elif area < 30000:
+            return "pickup"
+        return "truck"
+    return "vehicle"
 # -- palette ---------------------------------------------------------------
 C_REF       = (0,   255, 180)   # reference boundary line
 C_BOX       = (255, 200,   0)   # vehicle box
@@ -291,6 +351,13 @@ class Tripwire:
         bev = [calib.to_bev(p) for p in self.img_pts]
         self._p1 = np.array(bev[0], float)
         self._p2 = np.array(bev[1], float)
+    def distance_to_gate(self, bev_pt) -> float:
+        if self._p1 is None or self._p2 is None: return 999.0
+        A, B, C = self._p1, self._p2, np.array(bev_pt, float)
+        lv = B - A; ll = np.linalg.norm(lv)
+        if ll < 1e-9: return 999.0
+        t  = np.clip(np.dot(C - A, lv) / ll**2, 0, 1)
+        return float(np.linalg.norm(C - (A + t*lv)))
     def crossed(self, prev_bev, curr_bev) -> bool:
         if self._p1 is None: return False
         def ccw(A, B, C):
@@ -299,10 +366,7 @@ class Tripwire:
         if ccw(A,C,D) != ccw(B,C,D) and ccw(A,B,C) != ccw(A,B,D):
             return True
         # proximity fallback
-        lv = B - A; ll = np.linalg.norm(lv)
-        if ll < 1e-9: return False
-        t  = np.clip(np.dot(C - A, lv) / ll**2, 0, 1)
-        return np.linalg.norm(C - (A + t*lv)) < 0.55
+        return self.distance_to_gate(curr_bev) < 0.75
     def reset(self): self.__init__()
     def draw(self, frame: np.ndarray, calib: Calibrator):
         if len(self.img_pts) < 2 or self._p1 is None: return
@@ -340,10 +404,14 @@ class WheelLocalizer:
         self.dark_thresh = dark_thresh
         self.min_area    = min_area
     def locate(self, frame: np.ndarray,
-               x1: int, y1: int, x2: int, y2: int
+               x1: int, y1: int, x2: int, y2: int, vtype: str = ""
                ) -> Tuple[Tuple[int,int], Tuple[int,int]]:
         """Return (left_wheel_px, right_wheel_px) in full-image coordinates."""
         bh = y2 - y1
+        bw = x2 - x1
+        if vtype in ("bicycle", "motorcycle", "rider", "person") or bw < 40:
+            wy = max(y1 + 5, y2 - max(3, int(bh * 0.05)))
+            return (x1 + int(bw * 0.3), wy), (x1 + int(bw * 0.7), wy)
         crop_y1 = y1 + int(bh * 0.68)   # bottom 32 % of box
         crop = frame[crop_y1:y2, x1:x2]
         if crop.size == 0:
@@ -506,7 +574,7 @@ class ResultsLog:
                 r.lw_x, r.rw_x, r.conf
             ]
             ws.append(row_data)
-            is_truck = r.vtype in ("truck", "bus")
+            is_truck = r.vtype in TRUCK_CLASSES
             fill = T_FILL if is_truck else (A_FILL if i%2==0 else W_FILL)
             for c_i in range(1, len(headers)+1):
                 cell = ws.cell(row=3+i, column=c_i)
@@ -593,7 +661,7 @@ def draw_vehicle(frame, x1, y1, x2, y2, track_id, vtype, conf,
                  boundary: RightBoundary, calib: Calibrator,
                  triggered: bool, W: int, H: int):
     box_col = (0,220,80) if triggered else C_BOX
-    thick   = 3 if vtype in ("truck","bus") else 2
+    thick   = 3 if vtype in TRUCK_CLASSES else 2
     cv2.rectangle(frame, (x1,y1), (x2,y2), box_col, thick)
     # Wheel markers
     cv2.circle(frame, lw, 7, C_WHEEL_L, -1)
@@ -626,7 +694,7 @@ def draw_vehicle(frame, x1, y1, x2, y2, track_id, vtype, conf,
                 cv2.FONT_HERSHEY_SIMPLEX, 0.56, C_LABEL, 2, cv2.LINE_AA)
 def draw_hud(frame, log: ResultsLog, paused: bool,
              fps_disp: float, video_name: str):
-    trucks = [r for r in log.records if r.vtype in ("truck","bus")]
+    trucks = [r for r in log.records if r.vtype in TRUCK_CLASSES]
     lines = [
         f"Video: {video_name}   Events: {len(log.records)}   "
         f"Trucks/Buses: {len(trucks)}",
@@ -685,8 +753,9 @@ def phase_tripwire(win, frame, wire: Tripwire,
 def run(source: str, road_width_m: float, lane_width_m: float,
         rect_width_m: float, rect_length_m: float,
         model_name: str, output_path: str,
-    conf_thresh: float, calib_file: str, output_fps: float,
-    force_calib: bool):
+        conf_thresh: float, calib_file: str, output_fps: float,
+        force_calib: bool, iou_thresh: float = 0.50, imgsz: int = 1280,
+        include_riders: bool = True):
     if not YOLO_OK:
         sys.exit("[ERROR] ultralytics not installed -- run: pip install ultralytics")
     video_name = Path(source).stem
@@ -754,27 +823,40 @@ def run(source: str, road_width_m: float, lane_width_m: float,
             LaneGrid.draw(frame, boundary, calib, lane_width_m, road_width_m)
             boundary.draw(frame, calib)
             wire.draw(frame, calib)
+            # Active vehicle classes to track
+            active_classes = {k: v for k, v in VEHICLE_CLASSES.items() if (k != 0 or include_riders)}
+
+            # Low confidence threshold for YOLO so ByteTrack receives candidate boxes for 2-wheelers
+            track_conf = min(conf_thresh, 0.12)
+
+            track_kwargs = {
+                "persist": True,
+                "conf": track_conf,
+                "iou": iou_thresh,
+                "tracker": "bytetrack.yaml",
+                "classes": list(active_classes.keys()),
+                "verbose": False
+            }
+            if imgsz > 0:
+                track_kwargs["imgsz"] = imgsz
+
             # Detection + tracking
-            results = model.track(
-                frame, persist=True,
-                conf=conf_thresh,
-                tracker="bytetrack.yaml",
-                classes=list(VEHICLE_CLASSES.keys()),
-                verbose=False
-            )[0]
+            results = model.track(frame, **track_kwargs)[0]
             current_ids: set = set()
-            if results.boxes is not None and results.boxes.id is not None:
+            if results.boxes is not None and len(results.boxes) > 0:
                 boxes  = results.boxes.xyxy.cpu().numpy()
-                ids    = results.boxes.id.cpu().numpy().astype(int)
+                ids    = results.boxes.id.cpu().numpy().astype(int) if results.boxes.id is not None else np.arange(1, len(boxes) + 1)
                 clss   = results.boxes.cls.cpu().numpy().astype(int)
                 confs  = results.boxes.conf.cpu().numpy()
                 for box, track_id, cls_id, conf in zip(boxes, ids, clss, confs):
-                    if cls_id not in VEHICLE_CLASSES: continue
-                    vtype = VEHICLE_CLASSES[cls_id]
+                    if cls_id not in active_classes: continue
+                    min_conf = min(conf_thresh, CLASS_CONF_THRESHOLDS.get(cls_id, conf_thresh))
+                    if conf < min_conf: continue
                     x1, y1, x2, y2 = map(int, box)
+                    vtype = classify_indian_vehicle(cls_id, x2 - x1, y2 - y1, conf)
                     current_ids.add(track_id)
                     # -- wheel locations ---------------------------
-                    lw_img, rw_img = localizer.locate(frame, x1, y1, x2, y2)
+                    lw_img, rw_img = localizer.locate(frame, x1, y1, x2, y2, vtype)
                     # -- BEV coords for both wheels + center -------
                     lw_bev  = calib.to_bev(lw_img)
                     rw_bev  = calib.to_bev(rw_img)
@@ -873,8 +955,14 @@ if __name__ == "__main__":
                     help="YOLO model name (e.g. yolo11x, yolov8l, yolov8x)")
     ap.add_argument("--output",       default="output.mp4",
                     help="Output annotated video path")
-    ap.add_argument("--conf",         type=float, default=0.30,
+    ap.add_argument("--conf",         type=float, default=0.20,
                     help="Detection confidence threshold")
+    ap.add_argument("--iou",          type=float, default=0.50,
+                    help="NMS IoU threshold for overlapping detections")
+    ap.add_argument("--imgsz",        type=int, default=1280,
+                    help="Inference image resolution (higher resolution identifies small bikes & motorcycles)")
+    ap.add_argument("--no-riders",    action="store_true",
+                    help="Exclude class 0 (person/rider) from vehicle detection")
     ap.add_argument("--fps",          type=float, default=24.0,
                     help="Output video frame rate")
     ap.add_argument("--calib-file",   default="",
@@ -883,16 +971,19 @@ if __name__ == "__main__":
                     help="Ignore existing calibration file and redo phase 1")
     args = ap.parse_args()
     run(
-        source       = args.source,
-        road_width_m = args.road_width,
-        lane_width_m = args.lane_width,
-        rect_width_m = args.rect_width,
-        rect_length_m= args.rect_length,
-        model_name   = args.model,
-        output_path  = args.output,
-        conf_thresh  = args.conf,
-        calib_file   = args.calib_file,
-        output_fps   = args.fps,
-        force_calib  = args.force_calib,
+        source        = args.source,
+        road_width_m  = args.road_width,
+        lane_width_m  = args.lane_width,
+        rect_width_m  = args.rect_width,
+        rect_length_m = args.rect_length,
+        model_name    = args.model,
+        output_path   = args.output,
+        conf_thresh   = args.conf,
+        calib_file    = args.calib_file,
+        output_fps    = args.fps,
+        force_calib   = args.force_calib,
+        iou_thresh    = args.iou,
+        imgsz         = args.imgsz,
+        include_riders= not args.no_riders,
     )
 

@@ -74,7 +74,7 @@ pip install -r requirements.txt
 Run `pipeline.py` with your video file path:
 
 ```powershell
-python pipeline.py --source "C:\Traffic_Videos\sample_video.mp4" --model yolo11x --output outputs/sample_annotated.mp4 --calib-file calib.json
+python pipeline.py --source "C:\Traffic_Videos\sample_video.mp4" --model yolo11x --conf 0.20 --imgsz 1280 --output outputs/sample_annotated.mp4 --calib-file calib.json
 ```
 
 #### 🎯 First-Time Interactive Calibration (8 Clicks)
@@ -106,7 +106,7 @@ When the video window opens, follow the on-screen prompt to click **8 reference 
 To process a directory full of traffic videos automatically:
 
 ```powershell
-python batch.py --video-dir "C:\Traffic_Videos" --output-dir outputs --calib-file calib.json --model yolo11x
+python batch.py --video-dir "C:\Traffic_Videos" --output-dir outputs --calib-file calib.json --model yolo11x --conf 0.20 --imgsz 1280
 ```
 
 - Each video will be processed using the saved calibration or prompt for calibration setup if needed.

@@ -11,7 +11,7 @@ STEP 1 — Install all dependencies  (do this ONCE)
 
 STEP 2 — Run a single video  (first time — calibration required)
 -----------------------------------------------------------------
-  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --calib-file calib.json
+  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --conf 0.20 --imgsz 1280 --calib-file calib.json
 
   >> When the window opens, you will click 8 points total:
        [Phase 1]  Click 4 road corners in order:
@@ -20,12 +20,9 @@ STEP 2 — Run a single video  (first time — calibration required)
        [Phase 2]  Click 2 points along the RIGHT road boundary
        [Phase 3]  Click 2 points to draw the measurement gate line
 
-  >> Calibration will be requested every time you run a video.
-
-  >> The output video is written at 24 fps, and the on-screen text has been enlarged for readability.
-
-  >> Calibration is saved to calib.json automatically.
-  >> You will be asked to click the 8 points again for every new video.
+  >> The output video is written at 24 fps, with annotated offset rulers and wheel markers.
+  >> `--imgsz 1280` and `--conf 0.20` ensure accurate detection of bicycles, motorcycles, and 2-wheeler riders.
+  >> Calibration is saved to calib.json automatically for future reuse.
 
   Keyboard controls while it runs:
     SPACE  = Pause / Resume
@@ -40,11 +37,11 @@ STEP 2 — Run a single video  (first time — calibration required)
     094147-00015-M_offsets.csv        (CSV measurements)
 
 
-STEP 3 — Run ALL 5 videos automatically (after calib.json is saved)
+STEP 3 — Run ALL videos in batch automatically
 ---------------------------------------------------------------------
-  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x
+  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x --conf 0.20 --imgsz 1280
 
-  >> Processes all .TS videos one by one using saved calibration.
+  >> Processes all videos one by one using saved calibration (or prompts on 1st video).
   >> All outputs go into:  outputs\<video_name>\
 
 
@@ -69,17 +66,16 @@ STEP 4 — Generate statistical analysis & charts
 
   1.  pip install -r requirements.txt
 
-  2.  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --calib-file calib.json
+  2.  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --conf 0.20 --imgsz 1280 --calib-file calib.json
 
-  3.  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x
+  3.  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x --conf 0.20 --imgsz 1280
 
   4.  python analyze.py --csv outputs\*\*_offsets.csv --output-dir analysis
 
 ===============================================================
   NOTES:
-    - Run Step 2 first if you want to create calib.json, but the app will still ask for the 8-point setup on every video.
-    - Step 3 will ask for calibration on every video, so you click the 8 points each time.
+    - Default road width = 7.0 m, lane width = 3.5 m. Change with --road-width / --lane-width.
+    - `--conf 0.20` and `--imgsz 1280` ensure proper identification of small vehicles (bicycles, motorcycles, riders).
     - If you want to use a lighter/faster model, replace yolo11x with yolo11l or yolo11m.
     - All scripts must be run from the  f:\BTP\Autmn Sem\  directory.
-    - Default road width = 7.0 m, lane width = 3.5 m. Change with --road-width / --lane-width.
 ===============================================================

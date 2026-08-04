@@ -34,7 +34,7 @@ def find_videos(video_dir: str) -> list[Path]:
     return vids
 
 def run_pipeline(video: Path, out_root: Path, calib_file: str,
-                 model: str, conf: float,
+                 model: str, conf: float, iou: float, imgsz: int, no_riders: bool,
                  road_width: float, lane_width: float,
                  rect_width: float, rect_length: float,
                  force_calib: bool = False) -> Path:
@@ -49,11 +49,15 @@ def run_pipeline(video: Path, out_root: Path, calib_file: str,
         "--model",        model,
         "--output",       out_vid,
         "--conf",         str(conf),
+        "--iou",          str(iou),
+        "--imgsz",        str(imgsz),
         "--road-width",   str(road_width),
         "--lane-width",   str(lane_width),
         "--rect-width",   str(rect_width),
         "--rect-length",  str(rect_length),
     ]
+    if no_riders:
+        cmd += ["--no-riders"]
     if calib_file:
         cmd += ["--calib-file", calib_file]
     if force_calib:
@@ -94,7 +98,14 @@ def main():
                     help="Calibration JSON (saved from first video, reused for rest)")
     ap.add_argument("--model",        default="yolo11x",
                     help="YOLO model name")
-    ap.add_argument("--conf",         type=float, default=0.30)
+    ap.add_argument("--conf",         type=float, default=0.20,
+                    help="Confidence threshold")
+    ap.add_argument("--iou",          type=float, default=0.50,
+                    help="NMS IoU threshold")
+    ap.add_argument("--imgsz",        type=int, default=1280,
+                    help="Inference image resolution")
+    ap.add_argument("--no-riders",    action="store_true",
+                    help="Exclude class 0 (person/rider) from vehicle detection")
     ap.add_argument("--road-width",   type=float, default=7.0)
     ap.add_argument("--lane-width",   type=float, default=3.5)
     ap.add_argument("--rect-width",   type=float, default=7.0)
@@ -114,6 +125,9 @@ def main():
             calib_file   = args.calib_file,
             model        = args.model,
             conf         = args.conf,
+            iou          = args.iou,
+            imgsz        = args.imgsz,
+            no_riders    = args.no_riders,
             road_width   = args.road_width,
             lane_width   = args.lane_width,
             rect_width   = args.rect_width,

@@ -15,6 +15,11 @@
 
 from __future__ import annotations
 import argparse, sys
+if hasattr(sys.stdout, "reconfigure"):
+    try:
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    except Exception:
+        pass
 from pathlib import Path
 from typing import List
 
@@ -51,12 +56,16 @@ except ImportError:
 
 # ── Style ─────────────────────────────────────────────────────────────────
 PALETTE = {
-    "truck":      "#E63946",
-    "bus":        "#F4A261",
-    "car":        "#457B9D",
-    "motorcycle": "#2A9D8F",
-    "bicycle":    "#9B5DE5",
-    "other":      "#B0B0B0",
+    "multi_axle_truck": "#D90429",
+    "truck":            "#E63946",
+    "bus":              "#F4A261",
+    "pickup":           "#E76F51",
+    "car":              "#457B9D",
+    "autorickshaw":     "#E9C46A",
+    "motorcycle":       "#2A9D8F",
+    "bicycle":          "#9B5DE5",
+    "rider":            "#A8DADC",
+    "other":            "#B0B0B0",
 }
 BG      = "#0F1924"
 FG      = "#E8EDF2"
@@ -158,7 +167,7 @@ def make_figures(df: pd.DataFrame, out_dir: Path):
     fig_dir = out_dir / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
-    trucks = df[df["type"].isin(["truck","bus"])]
+    trucks = df[df["type"].isin(["truck", "bus", "multi_axle_truck", "pickup"])]
 
     # ── Fig 1: Distribution overview (3 panels) ────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
@@ -285,7 +294,12 @@ def make_figures(df: pd.DataFrame, out_dir: Path):
             autopct="%1.1f%%", startangle=140,
             textprops={"color": FG},
         )
-        autotexts = pie_out[2] if len(pie_out) == 3 else []
+        if hasattr(pie_out, "autotexts"):
+            autotexts = pie_out.autotexts
+        elif isinstance(pie_out, (tuple, list)) and len(pie_out) == 3:
+            autotexts = pie_out[2]
+        else:
+            autotexts = []
         for at in autotexts:
             at.set_fontsize(10); at.set_color(BG)
         ax.set_title("Vehicle Type Distribution", fontsize=14, color=FG)
@@ -368,9 +382,11 @@ def main():
     df    = load_csvs(args.csv)
     stats = stats_table(df)
 
-    print("\n── Summary ──────────────────────────────────────────────────")
+    print("\n" + "="*60)
+    print("  Summary Statistics")
+    print("="*60)
     print(stats.to_string(index=False))
-    print("─────────────────────────────────────────────────────────────\n")
+    print("="*60 + "\n")
 
     stats.to_csv(out_dir / "statistics.csv", index=False)
     make_figures(df, out_dir)
