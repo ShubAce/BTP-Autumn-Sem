@@ -68,6 +68,9 @@ STEP 4 — Generate statistical analysis & charts
 
   2.  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --conf 0.20 --imgsz 1280 --calib-file calib.json
 
+python batch.py --video-dir "f:\BTP\videos" --output-dir outputs --imgsz 640 --skip-frames 2
+
+
   3.  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x --conf 0.20 --imgsz 1280
 
   4.  python analyze.py --csv outputs\*\*_offsets.csv --output-dir analysis

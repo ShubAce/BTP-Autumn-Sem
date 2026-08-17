@@ -167,7 +167,7 @@ def make_figures(df: pd.DataFrame, out_dir: Path):
     fig_dir = out_dir / "figures"
     fig_dir.mkdir(parents=True, exist_ok=True)
 
-    trucks = df[df["type"].isin(["truck", "bus", "multi_axle_truck", "pickup"])]
+    trucks = df[df["type"].isin(["truck", "bus", "heavy_truck", "multi_axle_truck", "pickup_lcv", "minibus", "pickup"])]
 
     # ── Fig 1: Distribution overview (3 panels) ────────────────────────
     fig, axes = plt.subplots(1, 3, figsize=(18, 6))
