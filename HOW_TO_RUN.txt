@@ -60,25 +60,33 @@ STEP 4 — Generate statistical analysis & charts
     figures\06_vehicle_distribution.png
 
 
-===============================================================
-  SUMMARY — Run these 4 commands in order:
-===============================================================
+STEP 5 — Automated Resumable Dataset Processing (Full Hierarchy)
+---------------------------------------------------------------------
+  python automate_dataset.py --root "f:\BTP\NH-19 1st and 2nd May" --output-dir outputs --calib-file calib.json --imgsz 640 --skip-frames 2
+
+  >> Automatically traverses Section (LHS/RHS) -> Date (1st May/2nd May) -> Session -> Video.
+  >> RHS / 2nd May is configured as a 3-lane road (10.5 m total width); other groups remain 2 lanes.
+  >> The first RHS / 2nd May video creates its own 3-lane calibration, reused for that group.
+  >> Maintains persistent progress in  outputs\checkpoint.json .
+  >> Generates single Master Excel report at  outputs\master_dataset_report.xlsx .
+  >> Automatically resumes from the exact interrupted video upon restart.
+  >> Automatically runs analyze.py at the end to generate all statistical charts in outputs\combined_analysis\figures\ .
+
+
+===============================================================================
+  SUMMARY — Run these commands in order:
+===============================================================================
 
   1.  pip install -r requirements.txt
 
-  2.  python pipeline.py --source "f:\BTP\videos\094147-00015-M.TS" --model yolo11x --conf 0.20 --imgsz 1280 --calib-file calib.json
+  2.  
+python automate_dataset.py --root "f:\BTP\NH-19 1st and 2nd May" --output-dir outputs --model yolo11x --imgsz 640 --skip-frames 2
 
-python batch.py --video-dir "f:\BTP\videos" --output-dir outputs --imgsz 640 --skip-frames 2
 
-
-  3.  python batch.py --video-dir "f:\BTP\videos" --output-dir "outputs" --calib-file calib.json --model yolo11x --conf 0.20 --imgsz 1280
-
-  4.  python analyze.py --csv outputs\*\*_offsets.csv --output-dir analysis
-
-===============================================================
+===============================================================================
   NOTES:
     - Default road width = 7.0 m, lane width = 3.5 m. Change with --road-width / --lane-width.
-    - `--conf 0.20` and `--imgsz 1280` ensure proper identification of small vehicles (bicycles, motorcycles, riders).
-    - If you want to use a lighter/faster model, replace yolo11x with yolo11l or yolo11m.
+    - `--skip-frames 2` provides 2x speedup on CPU. Use `--skip-frames 1` for full per-frame evaluation.
+    - `--imgsz 640` is optimized for CPU speed. Use `--imgsz 1280` if extra small vehicle detail is needed.
     - All scripts must be run from the  f:\BTP\Autmn Sem\  directory.
-===============================================================
+===============================================================================

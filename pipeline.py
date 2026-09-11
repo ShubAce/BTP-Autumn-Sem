@@ -226,23 +226,32 @@ class Calibrator:
         p  = np.array([[[px[0], px[1]]]], dtype=np.float32)
         return cv2.perspectiveTransform(p, self.H_inv)[0][0]
     # -- serialisation --------------------------------------------------
-    def save(self, path: str):
-        d = {"img_pts": self.img_pts, "rw": self.rw, "rl": self.rl}
+    def save(self, path: str, bnd_pts: List = None, wire_pts: List = None):
+        d = {
+            "img_pts": self.img_pts,
+            "rw": self.rw,
+            "rl": self.rl,
+            "bnd_pts": bnd_pts or [],
+            "wire_pts": wire_pts or [],
+        }
         with open(path, "w") as f:
             json.dump(d, f, indent=2)
         print(f"[CALIB] Saved -> {path}")
-    def load(self, path: str) -> bool:
+    def load(self, path: str) -> Tuple[bool, List, List]:
+        bnd_pts, wire_pts = [], []
         try:
             with open(path) as f:
                 d = json.load(f)
-            self.img_pts = [tuple(p) for p in d["img_pts"]]
+            self.img_pts = [tuple(p) for p in d.get("img_pts", [])]
             if len(self.img_pts) == 4:
                 self._compute(); self.confirmed = True
                 print(f"[CALIB] Loaded from {path}")
-                return True
+            bnd_pts  = [tuple(p) for p in d.get("bnd_pts", [])]
+            wire_pts = [tuple(p) for p in d.get("wire_pts", [])]
+            return True, bnd_pts, wire_pts
         except Exception:
             pass
-        return False
+        return False, [], []
     # -- draw -----------------------------------------------------------
     def draw_overlay(self, frame: np.ndarray):
         h, w = frame.shape[:2]
@@ -791,7 +800,8 @@ def run(source: str, road_width_m: float, lane_width_m: float,
         model_name: str, output_path: str,
         conf_thresh: float, calib_file: str, output_fps: float,
         force_calib: bool, iou_thresh: float = 0.50, imgsz: int = 1280,
-        include_riders: bool = True, skip_frames: int = 0):
+        include_riders: bool = True, skip_frames: int = 0,
+        headless: bool = False, save_video: bool = True):
     if not YOLO_OK:
         sys.exit("[ERROR] ultralytics not installed -- run: pip install ultralytics")
     video_name = Path(source).stem
@@ -799,6 +809,7 @@ def run(source: str, road_width_m: float, lane_width_m: float,
     print(f"  Wheel Wander Pipeline v4.0  |  IIT Kharagpur BTP")
     print(f"  Video : {source}")
     print(f"  Model : {model_name}")
+    print(f"  Save Video : {save_video}")
     print(f"{'='*60}\n")
     # -- load model -----------------------------------------------------
     model = YOLO(f"{model_name}.pt")
@@ -812,8 +823,10 @@ def run(source: str, road_width_m: float, lane_width_m: float,
     VH   = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
     total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
     print(f"[INFO] {VW}-{VH}  @{fps:.1f}fps  frames-{total_frames}")
-    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    writer = cv2.VideoWriter(output_path, fourcc, fps, (VW, VH))
+    writer = None
+    if save_video and output_path:
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        writer = cv2.VideoWriter(output_path, fourcc, fps, (VW, VH))
     ret, first_frame = cap.read()
     if not ret: sys.exit("[ERROR] Cannot read first frame.")
     cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -824,16 +837,44 @@ def run(source: str, road_width_m: float, lane_width_m: float,
     wire       = Tripwire()
     localizer  = WheelLocalizer()
     log        = ResultsLog()
-    # -- window ---------------------------------------------------------
-    cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(WIN, min(VW, 1440), min(VH, 810))
     # -- calibration (load or interactive) ------------------------------
-    if not calib.confirmed:
-        phase_calibration(WIN, first_frame, calib, cap)
-        if calib_file:
-            calib.save(calib_file)
-    phase_boundary(WIN, first_frame, boundary, calib, cap)
-    phase_tripwire(WIN, first_frame, wire, calib, cap)
+    bnd_pts_loaded, wire_pts_loaded = [], []
+    if calib_file and Path(calib_file).exists() and not force_calib:
+        _, bnd_pts_loaded, wire_pts_loaded = calib.load(calib_file)
+
+    if calib.confirmed:
+        if bnd_pts_loaded:
+            boundary.img_pts = bnd_pts_loaded
+            boundary.confirmed = True
+            boundary.project(calib)
+        elif not boundary.confirmed and len(calib.img_pts) == 4:
+            boundary.img_pts = [calib.img_pts[1], calib.img_pts[3]]
+            boundary.confirmed = True
+            boundary.project(calib)
+
+        if wire_pts_loaded:
+            wire.img_pts = wire_pts_loaded
+            wire.confirmed = True
+            wire.project(calib)
+        elif not wire.confirmed and len(calib.img_pts) == 4:
+            wire.img_pts = [calib.img_pts[0], calib.img_pts[1]]
+            wire.confirmed = True
+            wire.project(calib)
+
+    if not headless:
+        cv2.namedWindow(WIN, cv2.WINDOW_NORMAL)
+        cv2.resizeWindow(WIN, min(VW, 1440), min(VH, 810))
+        if not calib.confirmed:
+            phase_calibration(WIN, first_frame, calib, cap)
+            if calib_file:
+                calib.save(calib_file, bnd_pts=boundary.img_pts, wire_pts=wire.img_pts)
+        if not boundary.confirmed:
+            phase_boundary(WIN, first_frame, boundary, calib, cap)
+        if not wire.confirmed:
+            phase_tripwire(WIN, first_frame, wire, calib, cap)
+
+    if calib_file and calib.confirmed:
+        calib.save(calib_file, bnd_pts=boundary.img_pts, wire_pts=wire.img_pts)
     # -- Pre-compute detection settings (fixed for the whole video) -----------
     active_classes = {k: v for k, v in VEHICLE_CLASSES.items() if (k != 0 or include_riders)}
     track_conf = min(conf_thresh, 0.15)      # pass low-conf boxes into ByteTrack
@@ -869,6 +910,9 @@ def run(source: str, road_width_m: float, lane_width_m: float,
             now     = time.perf_counter()
             fps_disp = 1.0 / max(now - prev_t, 1e-9)
             prev_t  = now
+            if frame_no % 50 == 0 or frame_no == total_frames:
+                pct = (frame_no / total_frames * 100.0) if total_frames > 0 else 0.0
+                print(f"[PROGRESS] Frame {frame_no}/{total_frames} ({pct:.1f}%) | {fps_disp:.1f} FPS | Logged: {len(log.records)}", flush=True)
             # Night enhancement
             frame = enhancer.enhance(frame)
             # Overlays
@@ -879,7 +923,8 @@ def run(source: str, road_width_m: float, lane_width_m: float,
             if skip_frames > 1 and frame_no % skip_frames != 0:
                 # Skipped frame: draw HUD from previous detections then continue
                 draw_hud(frame, log, paused, fps_disp, video_name)
-                writer.write(frame)
+                if writer is not None:
+                    writer.write(frame)
             else:
                 results = model.track(frame, **track_kwargs)[0]
                 current_ids: set = set()
@@ -942,40 +987,47 @@ def run(source: str, road_width_m: float, lane_width_m: float,
                 history_bev  = {k: v for k,v in history_bev.items() if k in current_ids}
                 triggered_ids = {k for k in triggered_ids if k in current_ids or k in history_bev}
                 draw_hud(frame, log, paused, fps_disp, video_name)
-                writer.write(frame)
-        cv2.imshow(WIN, frame)
-        k = cv2.waitKey(1) & 0xFF
-        if k in (ord('q'), 27):
-            break
-        elif k == ord(' '):
-            paused = not paused
-        elif k == ord('s'):
-            saved_n += 1
-            fn = str(Path(output_path).parent / f"frame_{saved_n:04d}.png")
-            cv2.imwrite(fn, frame)
-            print(f"[SAVED] {fn}")
-        elif k == ord('e'):
-            stem = str(Path(output_path).parent / video_name)
-            log.export_xlsx(stem + "_offsets.xlsx")
-            log.export_csv(stem + "_offsets.csv")
-        elif k == ord('r'):
-            calib.reset(); boundary.reset(); wire.reset()
-            cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-            ret2, first_frame = cap.read()
-            if not ret2: break
-            cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
-            phase_calibration(WIN, first_frame, calib, cap)
-            if calib_file: calib.save(calib_file)
-            phase_boundary(WIN, first_frame, boundary, calib, cap)
-            phase_tripwire(WIN, first_frame, wire, calib, cap)
-    cap.release(); writer.release(); cv2.destroyAllWindows()
+                if writer is not None:
+                    writer.write(frame)
+        if not headless:
+            cv2.imshow(WIN, frame)
+            k = cv2.waitKey(1) & 0xFF
+            if k in (ord('q'), 27):
+                break
+            elif k == ord(' '):
+                paused = not paused
+            elif k == ord('s'):
+                saved_n += 1
+                fn = str(Path(output_path).parent / f"frame_{saved_n:04d}.png")
+                cv2.imwrite(fn, frame)
+                print(f"[SAVED] {fn}")
+            elif k == ord('e'):
+                stem = str(Path(output_path).parent / video_name)
+                log.export_xlsx(stem + "_offsets.xlsx")
+                log.export_csv(stem + "_offsets.csv")
+            elif k == ord('r'):
+                calib.reset(); boundary.reset(); wire.reset()
+                cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+                ret2, first_frame = cap.read()
+                if not ret2: break
+                cap.set(cv2.CAP_PROP_POS_FRAMES, frame_no)
+                phase_calibration(WIN, first_frame, calib, cap)
+                if calib_file: calib.save(calib_file, bnd_pts=boundary.img_pts, wire_pts=wire.img_pts)
+                phase_boundary(WIN, first_frame, boundary, calib, cap)
+                phase_tripwire(WIN, first_frame, wire, calib, cap)
+    cap.release()
+    if writer is not None:
+        writer.release()
+    if not headless:
+        cv2.destroyAllWindows()
     # Auto-export on quit
     out_dir = Path(output_path).parent
     stem    = str(out_dir / video_name)
     log.export_xlsx(stem + "_offsets.xlsx")
     log.export_csv(stem + "_offsets.csv")
     print(f"\n[DONE] Processed {frame_no} frames -- {len(log.records)} events logged.")
-    print(f"[DONE] Output video -> {output_path}")
+    if writer is not None:
+        print(f"[DONE] Output video -> {output_path}")
     print(f"[DONE] Excel        -> {stem}_offsets.xlsx")
 # ---------------------------------------------------------------------------
 if __name__ == "__main__":
@@ -1013,6 +1065,10 @@ if __name__ == "__main__":
                     help="Path to JSON calibration file (auto-saved/loaded)")
     ap.add_argument("--force-calib", action="store_true",
                     help="Ignore existing calibration file and redo phase 1")
+    ap.add_argument("--headless",    action="store_true",
+                    help="Run without displaying OpenCV window (useful for batch / background automation)")
+    ap.add_argument("--no-video",    action="store_true",
+                    help="Do not write the annotated MP4 video file to disk (saves disk space and speeds up processing)")
     args = ap.parse_args()
     run(
         source        = args.source,
@@ -1030,5 +1086,7 @@ if __name__ == "__main__":
         imgsz         = args.imgsz,
         include_riders= not args.no_riders,
         skip_frames   = args.skip_frames,
+        headless      = args.headless,
+        save_video    = not args.no_video,
     )
 

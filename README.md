@@ -1,4 +1,5 @@
 # Wheel Wander & Lateral Offset Measurement — v4.0
+
 **BTP | IIT Kharagpur | Computer Vision for Traffic Engineering**
 
 ---
@@ -6,6 +7,7 @@
 ## Overview
 
 An end-to-end computer vision pipeline to automatically measure:
+
 - **Left-wheel offset** from the right road boundary
 - **Right-wheel offset** from the right road boundary
 - **Vehicle center offset** from the right road boundary
@@ -16,12 +18,12 @@ for trucks, buses, cars, motorcycles and other vehicles from roadside camera foo
 
 ## Files
 
-| File | Purpose |
-|------|---------|
-| `pipeline.py` | Main real-time processing pipeline |
-| `analyze.py` | Post-processing statistical analysis |
-| `batch.py` | Process all videos in a folder automatically |
-| `requirements.txt` | Python dependencies |
+| File               | Purpose                                      |
+| ------------------ | -------------------------------------------- |
+| `pipeline.py`      | Main real-time processing pipeline           |
+| `analyze.py`       | Post-processing statistical analysis         |
+| `batch.py`         | Process all videos in a folder automatically |
+| `requirements.txt` | Python dependencies                          |
 
 ---
 
@@ -54,27 +56,31 @@ python pipeline.py `
 When the video opens, you will see three setup phases:
 
 **Phase 1 — Calibration (4-point homography)**
+
 - Click **4 corners** of a known road rectangle in order:
-  - P1 = Far Left, P2 = Far Right, P3 = Near Left, P4 = Near Right
+    - P1 = Far Left, P2 = Far Right, P3 = Near Left, P4 = Near Right
 - Use lane markings, kerb edges, or road paint as reference points
 - The calibration is saved to `calib.json` and **reused automatically** for all future videos from the same camera
 
 **Phase 2 — Right Boundary Line**
+
 - Click **2 points** along the rightmost road edge
 - This becomes the reference (offset = 0)
 
 **Phase 3 — Measurement Gate**
+
 - Click **2 points** to draw a line across the road
 - Offset measurements are recorded when vehicles cross this gate
 
 ### Keyboard Controls
-| Key | Action |
-|-----|--------|
-| `SPACE` | Pause / Resume |
-| `E` | Export Excel + CSV immediately |
-| `S` | Save current frame as PNG |
-| `R` | Redo calibration |
-| `Q` / `ESC` | Quit (auto-exports on exit) |
+
+| Key         | Action                         |
+| ----------- | ------------------------------ |
+| `SPACE`     | Pause / Resume                 |
+| `E`         | Export Excel + CSV immediately |
+| `S`         | Save current frame as PNG      |
+| `R`         | Redo calibration               |
+| `Q` / `ESC` | Quit (auto-exports on exit)    |
 
 ---
 
@@ -92,6 +98,10 @@ python batch.py `
 - All subsequent videos use saved calibration automatically
 - After all videos, runs combined statistical analysis
 
+The automated hierarchy runner uses a separate 3-lane geometry for `RHS / 2nd May`
+(`10.5 m` road width with `3.5 m` lanes). Its first video is calibrated separately;
+the other section/date groups continue to use the existing 2-lane defaults.
+
 ---
 
 ## Statistical Analysis Only
@@ -103,6 +113,7 @@ python analyze.py `
 ```
 
 Produces:
+
 - `analysis_output/statistics.csv`
 - `analysis_output/wheel_wander_report.xlsx` (full stats + per-vehicle-type)
 - `analysis_output/figures/` (6 publication-quality PNG charts)
@@ -111,19 +122,19 @@ Produces:
 
 ## Output Excel Structure
 
-| Column | Description |
-|--------|-------------|
-| Video | Source video filename |
-| Frame | Frame number |
-| Time(s) | Timestamp in seconds |
-| Vehicle ID | Unique track ID |
-| Type | truck / bus / car / motorcycle / bicycle |
-| L-Wheel Off.(m) | Left wheel offset from right boundary |
-| R-Wheel Off.(m) | Right wheel offset from right boundary |
-| Center Off.(m) | Vehicle center offset from right boundary |
-| LW BEV-X(m) | Left wheel X in bird's-eye-view metres |
-| RW BEV-X(m) | Right wheel X in bird's-eye-view metres |
-| Confidence | Detection confidence score |
+| Column          | Description                               |
+| --------------- | ----------------------------------------- |
+| Video           | Source video filename                     |
+| Frame           | Frame number                              |
+| Time(s)         | Timestamp in seconds                      |
+| Vehicle ID      | Unique track ID                           |
+| Type            | truck / bus / car / motorcycle / bicycle  |
+| L-Wheel Off.(m) | Left wheel offset from right boundary     |
+| R-Wheel Off.(m) | Right wheel offset from right boundary    |
+| Center Off.(m)  | Vehicle center offset from right boundary |
+| LW BEV-X(m)     | Left wheel X in bird's-eye-view metres    |
+| RW BEV-X(m)     | Right wheel X in bird's-eye-view metres   |
+| Confidence      | Detection confidence score                |
 
 ---
 
@@ -138,13 +149,13 @@ Produces:
 
 ## Model Options (--model)
 
-| Model | Size | Speed | Accuracy |
-|-------|------|-------|----------|
-| `yolo11n` | Nano | Fastest | Lower |
-| `yolo11s` | Small | Fast | Good |
-| `yolo11m` | Medium | Balanced | Better |
-| `yolo11l` | Large | Slower | High |
-| `yolo11x` | XLarge | Slowest | **Best** ← recommended |
+| Model     | Size   | Speed    | Accuracy               |
+| --------- | ------ | -------- | ---------------------- |
+| `yolo11n` | Nano   | Fastest  | Lower                  |
+| `yolo11s` | Small  | Fast     | Good                   |
+| `yolo11m` | Medium | Balanced | Better                 |
+| `yolo11l` | Large  | Slower   | High                   |
+| `yolo11x` | XLarge | Slowest  | **Best** ← recommended |
 
 ---
 
@@ -159,4 +170,4 @@ Produces:
 
 ---
 
-*IIT Kharagpur BTP | Autumn Semester*
+_IIT Kharagpur BTP | Autumn Semester_
