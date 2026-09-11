@@ -1,0 +1,15 @@
+Run (default settings, processes ALL highways)
+  python automate_all_videos.py
+
+python automate_all_videos.py --model yolo11x 
+
+---------------------------------------------------------------
+  USEFUL OPTIONS (add any of these to the command above)
+---------------------------------------------------------------
+  --only-highway NH-18        process only one highway (name match)
+  --retry-failed              retry videos that failed before
+  --force-calib               redo calibration for all groups
+  --save-video                keep annotated MP4 output files
+  --skip-analysis             skip end-of-run charts/stats
+  --model yolo11x             use big GPU model (default: yolo11n)
+  --skip-frames 1             process every frame (slower, more accurate)

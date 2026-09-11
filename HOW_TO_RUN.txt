@@ -90,3 +90,51 @@ python automate_dataset.py --root "f:\BTP\NH-19 1st and 2nd May" --output-dir ou
     - `--imgsz 640` is optimized for CPU speed. Use `--imgsz 1280` if extra small vehicle detail is needed.
     - All scripts must be run from the  f:\BTP\Autmn Sem\  directory.
 ===============================================================================
+
+
+===============================================================================
+  STEP 6 — Process ALL highway folders automatically (Multi-Root Mode)
+===============================================================================
+
+  Use automate_all_videos.py instead of automate_dataset.py when you have
+  multiple highway folders inside f:\BTP\video\  (e.g. NH-18, NH-19, etc.)
+
+  The script:
+    * Auto-discovers every highway subfolder under --video-root
+    * Works with ANY folder structure — the only strict requirement is that
+      leaf video folders must be named in HHMM-HHMM format (time sessions)
+    * Produces ONE unified master Excel with a Highway column:
+        outputs_all\master_dataset_report.xlsx
+          Sheet 1 : Processing Manifest  (one row per video, all highways)
+          Sheet 2 : All Vehicles Raw Data (all detection rows, with highway)
+    * Saves one checkpoint JSON per highway (fault-tolerant resume)
+    * Interactive calibration is triggered once per (highway / section / date)
+      group, then reused headlessly for all videos in that group
+
+  Basic command (run from f:\BTP\Autmn Sem\):
+    python automate_all_videos.py
+
+  Full options:
+    python automate_all_videos.py
+        --video-root   "f:\BTP\video"               # folder with highway subfolders
+        --output-dir   "f:\BTP\Autmn Sem\outputs_all"
+        --model        yolo11n                        # yolo11x for GPU
+        --conf         0.20
+        --imgsz        640
+        --skip-frames  2
+        --road-width   7.0
+        --lane-width   3.5
+
+  Useful flags:
+    --only-highway NH-18        # process only folders containing "NH-18"
+    --retry-failed              # retry all previously failed videos
+    --force-calib               # redo calibration for all groups
+    --save-video                # keep annotated MP4 files (off by default)
+    --skip-analysis             # skip the end-of-run analysis step
+
+  Calibration files are saved as:
+    outputs_all\calib_<highway>_<section>_<date>.json
+  e.g.:
+    outputs_all\calib_NH-18_2nd_and_3rd_May_LHS_2nd_May.json
+
+===============================================================================
