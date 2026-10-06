@@ -68,8 +68,8 @@ except ImportError:
 
 VIDEO_EXTS = {".ts", ".mp4", ".avi", ".mkv", ".mov", ".mpeg", ".mpg"}
 
-# Regex that matches time-session folder names like 0000-0100, 1300-1400, 2300-2400
-SESSION_RE = re.compile(r"^\d{4}-\d{4}$")
+# Regex that matches time-session folder names like 0000-0100 or 1300 - 1400.
+SESSION_RE = re.compile(r"^\d{4}\s*-\s*\d{4}$")
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -791,6 +791,17 @@ def main():
     # ── 3. Ctrl-C handler ─────────────────────────────────────────────────────
     def sig_handler(sig, frame):
         print("\n[INTERRUPT] Saving state before exit...")
+        interrupted = [v for v in all_videos if v.status == "In Progress"]
+        for vid in interrupted:
+            calib_json, _ = calib_path_for(vid, out_root)
+            if calib_json.exists():
+                try:
+                    calib_json.unlink()
+                    print(f"[INTERRUPT] Calibration cleared; it will be requested again for {vid.highway}/{vid.rel_path_str}")
+                except OSError as e:
+                    print(f"[WARN] Could not clear calibration {calib_json}: {e}")
+            vid.status = "Pending"
+            vid.error_reason = "Interrupted — calibration required on restart"
         for hw, vids in highway_videos.items():
             chk_mgr.save_checkpoint(hw, vids)
         chk_mgr.save_master_excel(all_videos)
